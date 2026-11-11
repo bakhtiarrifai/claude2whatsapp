@@ -82,7 +82,7 @@ async function openChat(page, name) {
   const hits = titles.filter((t) => same(t, name));
   if (hits.length === 0) {
     await clearSearch(page);
-    throw new WaError(`Grup "${name}" tidak ditemukan. Nama yang mirip: ${titles.slice(0, 8).join(", ") || "(tidak ada)"}.`);
+    throw new WaError(`Chat "${name}" tidak ditemukan. Nama yang mirip: ${titles.slice(0, 8).join(", ") || "(tidak ada)"}.`);
   }
   if (hits.length > 1) {
     await clearSearch(page);
@@ -104,7 +104,7 @@ async function openChat(page, name) {
 export async function send(name, text, { dryRun = false } = {}) {
   const page = await readyPage();
   const chat = await openChat(page, name);
-  if (dryRun) return { chat, status: "dry-run: grup ditemukan dan dibuka, tidak ada yang diketik atau dikirim" };
+  if (dryRun) return { chat, status: "dry-run: chat ditemukan dan dibuka, tidak ada yang diketik atau dikirim" };
   const composer = page.locator(SEL.composer).first();
   await composer.click();
   const lines = String(text).replace(/\r\n?/g, "\n").split("\n");
