@@ -1,0 +1,28 @@
+{
+  "name": "wa-studio",
+  "version": "0.1.0",
+  "description": "Local MCP server, scheduler and control panel that sends messages to WhatsApp groups through WhatsApp Web in its own browser profile",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "wa-studio": "src/mcp.js"
+  },
+  "scripts": {
+    "start": "node src/mcp.js",
+    "serve": "node src/daemon.js",
+    "login": "node src/login.js",
+    "studio": "node src/studio.js",
+    "register": "node src/register.js",
+    "autostart": "node src/autostart.js",
+    "check": "node scripts/check.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "playwright-core": "^1.64.0",
+    "zod": "^4.6.7"
+  }
+}

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Studio</title>
+<style>
+  :root { --bg:#f6f7f5; --card:#fff; --ink:#1d2421; --muted:#66706b; --line:#dfe3e0; --accent:#128c5e; --accent-ink:#fff; --bad:#b3261e; --warn:#8a5a00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111614; --card:#1a201d; --ink:#e6ebe8; --muted:#97a19c; --line:#2c3430; --accent:#2fbf86; --accent-ink:#06130d; --bad:#ff8a80; --warn:#f0c060; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 64px; display:grid; gap:16px; }
+  h1 { font-size:20px; margin:0; } h2 { font-size:16px; margin:0 0 12px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  textarea { min-height:110px; resize:vertical; }
+  button { padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
+  @media (max-width:600px) { .grid2 { grid-template-columns:1fr; } }
+  .muted { color:var(--muted); font-size:13px; } .bad { color:var(--bad); } .ok { color:var(--accent); } .warn { color:var(--warn); }
+  .days label { display:inline-flex; gap:4px; align-items:center; margin:0 10px 0 0; color:var(--ink); }
+  .days input { width:auto; }
+  ul.list { list-style:none; padding:0; margin:0; } ul.list li { border-top:1px solid var(--line); padding:10px 0; display:flex; gap:12px; justify-content:space-between; align-items:flex-start; }
+  ul.list li:first-child { border-top:0; }
+  .msg { white-space:pre-wrap; word-break:break-word; }
+  #qr img { width:228px; height:228px; background:#fff; padding:8px; border-radius:8px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="row" style="justify-content:space-between;margin:0"><h1>WhatsApp Studio</h1><button id="refresh">Muat ulang</button></header>
+
+  <section>
+    <h2>Status</h2>
+    <div id="status" class="muted">Memeriksa…</div>
+    <div id="qr"></div>
+  </section>
+
+  <section>
+    <h2>Kirim sekarang</h2>
+    <label for="chat">Grup</label>
+    <input id="chat" list="groupnames" placeholder="Nama grup persis seperti di WhatsApp">
+    <datalist id="groupnames"></datalist>
+    <div class="row" style="margin-top:6px"><button id="loadGroups">Ambil daftar grup</button><span id="groupsNote" class="muted"></span></div>
+    <label for="text">Pesan</label>
+    <textarea id="text" placeholder="Tulis pesan. *tebal*, _miring_, baris baru boleh."></textarea>
+    <div class="row"><button class="primary" id="send">Kirim</button><span id="sendOut" class="muted"></span></div>
+  </section>
+
+  <section>
+    <h2>Jadwalkan</h2>
+    <p class="muted" style="margin:0">Memakai grup dan pesan di atas. Jadwal berjalan selama layanan WhatsApp Studio menyala, tanpa perlu membuka Claude.</p>
+    <div class="grid2">
+      <div><label for="mode">Kapan</label><select id="mode"><option value="at">Sekali</option><option value="daily">Setiap hari</option></select></div>
+      <div id="atBox"><label for="at">Tanggal &amp; jam</label><input id="at" type="datetime-local"></div>
+      <div id="dailyBox" hidden><label for="daily">Jam</label><input id="daily" type="time" value="08:00"></div>
+    </div>
+    <div id="daysBox" hidden><label>Hari (kosong = setiap hari)</label><div class="days" id="days"></div></div>
+    <label for="label">Catatan (opsional)</label><input id="label" maxlength="80">
+    <div class="row"><button class="primary" id="addSched">Simpan jadwal</button><span id="schedOut" class="muted"></span></div>
+    <h2 style="margin-top:20px">Jadwal aktif <span id="tz" class="muted"></span></h2>
+    <ul class="list" id="schedList"></ul>
+  </section>
+
+  <section>
+    <h2>Riwayat</h2>
+    <ul class="list" id="hist"></ul>
+  </section>
+</main>
+<script>
+const TOKEN = "__TOKEN__";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function api(op, args = {}) {
+  const r = await fetch(`/api/${op}`, { method: "POST", headers: { "content-type": "application/json", "x-wa-token": TOKEN }, body: JSON.stringify(args) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+$("days").innerHTML = DAYS.map((d, i) => `<label><input type="checkbox" value="${i + 1}">${d}</label>`).join("");
+$("mode").onchange = () => { const d = $("mode").value === "daily"; $("atBox").hidden = d; $("dailyBox").hidden = !d; $("daysBox").hidden = !d; };
+
+async function loadStatus() {
+  $("status").textContent = "Memeriksa…";
+  try {
+    const s = await api("status");
+    const st = { ready: '<span class="ok">Tertaut, siap kirim</span>', qr: '<span class="warn">Belum tertaut: scan QR</span>', loading: '<span class="warn">WhatsApp Web masih memuat</span>' }[s.state] || esc(s.state);
+    $("status").innerHTML = `${st}<br><span class="muted">${s.sent_last_hour} pesan dalam 1 jam terakhir (maks. ${s.limits.max_per_hour}, jeda ≥ ${s.limits.min_gap_s} dtk)${s.working ? " · sedang: " + esc(s.working) : ""}${s.hint ? "<br>" + esc(s.hint) : ""}</span>`;
+    $("qr").innerHTML = s.qr_png ? `<p class="muted">WhatsApp di HP → Perangkat tertaut → Tautkan perangkat:</p><img alt="QR WhatsApp" src="data:image/png;base64,${s.qr_png}">` : "";
+  } catch (e) { $("status").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+async function loadScheds() {
+  const { schedules, timezone } = await api("schedules");
+  $("tz").textContent = `(${timezone})`;
+  $("schedList").innerHTML = schedules.length ? schedules.map((s) => `<li><div><b>${esc(s.chat)}</b> · ${s.daily ? `tiap hari ${esc(s.daily)}${s.days ? " (" + s.days.map((d) => DAYS[d - 1]).join(", ") + ")" : ""}` : "sekali"} · berikutnya <b>${esc(s.next)}</b>${s.label ? " · " + esc(s.label) : ""}<div class="msg muted">${esc(s.text)}</div></div><button data-del="${esc(s.id)}">Hapus</button></li>`).join("") : '<li class="muted">Belum ada jadwal.</li>';
+}
+async function loadHist() {
+  const { entries } = await api("history", { limit: 30 });
+  $("hist").innerHTML = entries.length ? entries.map((h) => `<li><div><span class="${h.ok ? "ok" : "bad"}">${h.ok ? "✓" : "✗"}</span> <b>${esc(h.chat)}</b> <span class="muted">· ${esc(new Date(h.time).toLocaleString())} · ${esc(h.source)}${h.status ? " · " + esc(h.status) : ""}</span><div class="msg muted">${esc(h.ok ? h.preview : h.error)}</div></div></li>`).join("") : '<li class="muted">Belum ada pengiriman.</li>';
+}
+$("schedList").onclick = async (e) => {
+  const id = e.target.dataset?.del; if (!id || !confirm("Hapus jadwal ini?")) return;
+  await api("schedule_remove", { id }).catch((err) => alert(err.message)); loadScheds();
+};
+$("loadGroups").onclick = async () => {
+  $("loadGroups").disabled = true; $("groupsNote").textContent = "Mengambil… (menggulir daftar chat)";
+  try { const g = await api("groups"); $("groupnames").innerHTML = g.groups.map((n) => `<option value="${esc(n)}">`).join(""); $("groupsNote").textContent = `${g.groups.length} grup${g.note ? " · " + g.note : ""}`; }
+  catch (e) { $("groupsNote").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  $("loadGroups").disabled = false;
+};
+$("send").onclick = async () => {
+  const chat = $("chat").value.trim(), text = $("text").value;
+  if (!chat || !text.trim()) return alert("Isi grup dan pesan.");
+  if (!confirm(`Kirim ke grup "${chat}"?\n\n${text}`)) return;
+  $("send").disabled = true; $("sendOut").textContent = "Mengirim…";
+  try { const r = await api("send", { chat, text }); $("sendOut").innerHTML = `<span class="ok">Terkirim ke ${esc(r.chat)} (${esc(r.status)})</span>`; }
+  catch (e) { $("sendOut").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  $("send").disabled = false; loadHist();
+};
+$("addSched").onclick = async () => {
+  const chat = $("chat").value.trim(), text = $("text").value;
+  if (!chat || !text.trim()) return alert("Isi grup dan pesan di bagian Kirim sekarang.");
+  const args = { chat, text, label: $("label").value.trim() || undefined };
+  if ($("mode").value === "at") { if (!$("at").value) return alert("Pilih tanggal dan jam."); args.at = $("at").value.replace("T", " "); }
+  else { args.daily = $("daily").value; const d = [...$("days").querySelectorAll("input:checked")].map((i) => +i.value); if (d.length) args.days = d; }
+  try { const s = await api("schedule_add", args); $("schedOut").innerHTML = `<span class="ok">Tersimpan, berikutnya ${esc(s.next)}</span>`; loadScheds(); }
+  catch (e) { $("schedOut").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+};
+$("refresh").onclick = () => { loadStatus(); loadScheds(); loadHist(); };
+$("refresh").onclick();
+</script>
+</body>
+</html>
