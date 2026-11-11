@@ -122,11 +122,14 @@ export async function send(name, text, { dryRun = false } = {}) {
   while (Date.now() < end) {
     await page.waitForTimeout(700);
     const r = await page.evaluate(([sel, probe]) => {
-      // The chat list is virtualised, so counting bubbles is unreliable: check the newest one is this text instead.
-      const all = document.querySelectorAll(sel);
-      const last = all[all.length - 1];
-      if (!last || !last.innerText.replace(/\s+/g, " ").includes(probe)) return null;
-      const labels = [...last.querySelectorAll("[aria-label]")].map((e) => e.getAttribute("aria-label").trim().toLowerCase());
+      // The message list is virtualised, so counting bubbles is unreliable. Find ours among the newest few by its
+      // text and status label (only our own messages have one); a reply may already have arrived below it.
+      const STATUS = /^(pending|sent|delivered|read|menunggu|terkirim|diterima|dibaca)$/;
+      const labelsOf = (e) => [...e.querySelectorAll("[aria-label]")].map((x) => x.getAttribute("aria-label").trim().toLowerCase());
+      const mine = [...document.querySelectorAll(sel)].slice(-6).reverse()
+        .find((e) => e.innerText.replace(/\s+/g, " ").includes(probe) && labelsOf(e).some((l) => STATUS.test(l)));
+      if (!mine) return null;
+      const labels = labelsOf(mine);
       if (labels.some((l) => /^(read|dibaca)$/.test(l))) return "read";
       if (labels.some((l) => /^(delivered|diterima)$/.test(l))) return "delivered";
       if (labels.some((l) => /^(sent|terkirim)$/.test(l))) return "sent";
