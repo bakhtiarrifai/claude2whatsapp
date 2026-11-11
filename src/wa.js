@@ -11,7 +11,8 @@ const SEL = {
   rows: '#pane-side [role="row"]',
   header: "#main header",
   composer: '#main footer [contenteditable="true"]',
-  outgoing: "#main .message-out",
+  // Every message bubble carries a data-id; ours has a status label (aria-label "Sent", "Delivered", "Read").
+  messages: "#main [role=\"row\"] [data-id]",
 };
 
 export class WaError extends Error {}
@@ -106,7 +107,6 @@ export async function send(name, text, { dryRun = false } = {}) {
   if (dryRun) return { chat, status: "dry-run: grup ditemukan dan dibuka, tidak ada yang diketik atau dikirim" };
   const composer = page.locator(SEL.composer).first();
   await composer.click();
-  const before = await page.locator(SEL.outgoing).count();
   const lines = String(text).replace(/\r\n?/g, "\n").split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (i) await page.keyboard.press("Shift+Enter");
@@ -116,21 +116,24 @@ export async function send(name, text, { dryRun = false } = {}) {
   if (!typed) throw new WaError("Kotak pesan tetap kosong setelah mengetik. Pesan tidak dikirim.");
   await page.keyboard.press("Enter");
 
-  // Sent = a new outgoing bubble whose clock icon has turned into a tick.
+  // Sent = a new message of ours whose status label (Pending → Sent → Delivered → Read) has moved past pending.
   const end = Date.now() + 30000;
   let tick = "pending";
   while (Date.now() < end) {
     await page.waitForTimeout(700);
-    const r = await page.evaluate(([sel, before]) => {
-      const out = document.querySelectorAll(sel);
-      if (out.length <= before) return null;
-      const last = out[out.length - 1];
-      if (last.querySelector('[data-icon="msg-dblcheck"], [data-icon="msg-dblcheck-ack"]')) return "delivered";
-      if (last.querySelector('[data-icon="msg-check"]')) return "sent";
+    const r = await page.evaluate(([sel, probe]) => {
+      // The chat list is virtualised, so counting bubbles is unreliable: check the newest one is this text instead.
+      const all = document.querySelectorAll(sel);
+      const last = all[all.length - 1];
+      if (!last || !last.innerText.replace(/\s+/g, " ").includes(probe)) return null;
+      const labels = [...last.querySelectorAll("[aria-label]")].map((e) => e.getAttribute("aria-label").trim().toLowerCase());
+      if (labels.some((l) => /^(read|dibaca)$/.test(l))) return "read";
+      if (labels.some((l) => /^(delivered|diterima)$/.test(l))) return "delivered";
+      if (labels.some((l) => /^(sent|terkirim)$/.test(l))) return "sent";
       return "pending";
-    }, [SEL.outgoing, before]);
+    }, [SEL.messages, norm(lines.find((l) => l.trim()) ?? "").slice(0, 60)]);
     if (r) tick = r;
-    if (r === "sent" || r === "delivered") break;
+    if (r && r !== "pending") break;
   }
   const left = norm(await composer.innerText().catch(() => ""));
   if (left) throw new WaError("Pesan masih ada di kotak ketik setelah Enter; WhatsApp tidak mengirimnya. Cek jendela browser.");
