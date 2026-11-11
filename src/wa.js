@@ -82,14 +82,18 @@ async function openChat(page, name) {
   const hits = titles.filter((t) => same(t, name));
   if (hits.length === 0) {
     await clearSearch(page);
-    throw new WaError(`Chat "${name}" tidak ditemukan. Nama yang mirip: ${titles.slice(0, 8).join(", ") || "(tidak ada)"}.`);
+    // Names sharing a word with the request first; the rest are often just "groups in common".
+    const words = norm(name).toLocaleLowerCase().split(" ");
+    const near = titles.filter((t) => words.some((w) => norm(t).toLocaleLowerCase().includes(w)));
+    throw new WaError(`Chat "${name}" tidak ditemukan. Nama yang mirip: ${(near.length ? near : titles).slice(0, 8).join(", ") || "(tidak ada)"}.`);
   }
   if (hits.length > 1) {
     await clearSearch(page);
     throw new WaError(`Ada ${hits.length} chat bernama "${name}". Ganti nama salah satunya di WhatsApp supaya tidak salah kirim.`);
   }
-  const row = await page.$$eval(SEL.rows, (rows, want) => rows.findIndex((r) => r.querySelector("span[title]")?.getAttribute("title") === want), hits[0]);
-  await page.locator(SEL.rows).nth(row).click();
+  // Click the name element itself: search results keep re-rendering, so "the n-th row" can be a different chat
+  // by the time the click lands. The header check below still guards against any wrong chat.
+  await page.locator(SEL.rows).locator(`span[title=${JSON.stringify(hits[0])}]`).first().click();
   await page.locator(SEL.composer).first().waitFor({ timeout: 15000 });
   const header = norm(await page.locator(SEL.header).first().innerText());
   if (!header.toLocaleLowerCase().includes(norm(hits[0]).toLocaleLowerCase())) {
