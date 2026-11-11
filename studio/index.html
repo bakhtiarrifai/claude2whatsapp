@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WhatsApp Studio</title>
+<title>Announce Studio</title>
 <style>
   :root { --bg:#f6f7f5; --card:#fff; --ink:#1d2421; --muted:#66706b; --line:#dfe3e0; --accent:#128c5e; --accent-ink:#fff; --bad:#b3261e; --warn:#8a5a00; }
   @media (prefers-color-scheme: dark) { :root { --bg:#111614; --card:#1a201d; --ink:#e6ebe8; --muted:#97a19c; --line:#2c3430; --accent:#2fbf86; --accent-ink:#06130d; --bad:#ff8a80; --warn:#f0c060; } }
@@ -23,7 +23,8 @@
   @media (max-width:600px) { .grid2 { grid-template-columns:1fr; } }
   .muted { color:var(--muted); font-size:13px; } .bad { color:var(--bad); } .ok { color:var(--accent); } .warn { color:var(--warn); }
   .days label { display:inline-flex; gap:4px; align-items:center; margin:0 10px 0 0; color:var(--ink); }
-  .days input { width:auto; }
+  .days input, .targets input { width:auto; }
+  .targets label { display:flex; gap:8px; align-items:center; margin:4px 0; color:var(--ink); font-size:15px; }
   ul.list { list-style:none; padding:0; margin:0; } ul.list li { border-top:1px solid var(--line); padding:10px 0; display:flex; gap:12px; justify-content:space-between; align-items:flex-start; }
   ul.list li:first-child { border-top:0; }
   .msg { white-space:pre-wrap; word-break:break-word; }
@@ -32,28 +33,33 @@
 </head>
 <body>
 <main>
-  <header class="row" style="justify-content:space-between;margin:0"><h1>WhatsApp Studio</h1><button id="refresh">Muat ulang</button></header>
+  <header class="row" style="justify-content:space-between;margin:0"><h1>Announce Studio <span class="muted" style="font-weight:400">Telegram + WhatsApp</span></h1><button id="refresh">Muat ulang</button></header>
 
   <section>
-    <h2>Status</h2>
+    <h2>WhatsApp</h2>
     <div id="status" class="muted">Memeriksa…</div>
     <div id="qr"></div>
   </section>
 
   <section>
-    <h2>Kirim sekarang</h2>
-    <label for="chat">Grup</label>
-    <input id="chat" list="groupnames" placeholder="Nama grup persis seperti di WhatsApp">
-    <datalist id="groupnames"></datalist>
-    <div class="row" style="margin-top:6px"><button id="loadGroups">Ambil daftar grup</button><span id="groupsNote" class="muted"></span></div>
+    <h2>Pengumuman / report</h2>
     <label for="text">Pesan</label>
-    <textarea id="text" placeholder="Tulis pesan. *tebal*, _miring_, baris baru boleh."></textarea>
-    <div class="row"><button class="primary" id="send">Kirim</button><span id="sendOut" class="muted"></span></div>
+    <textarea id="text" placeholder="Tulis pesan. *tebal*, _miring_, ~coret~, baris baru boleh. Format ikut terkonversi di Telegram."></textarea>
+    <label>Telegram (utama)</label>
+    <div class="targets" id="tgTargets"><span class="muted">Memuat…</span></div>
+    <label>WhatsApp (opsional)</label>
+    <div class="targets"><label><input type="checkbox" id="useWa"> Kirim juga ke grup WhatsApp</label></div>
+    <div id="waBox" hidden>
+      <input id="chat" list="groupnames" placeholder="Nama grup persis seperti di WhatsApp">
+      <datalist id="groupnames"></datalist>
+      <div class="row" style="margin-top:6px"><button id="loadGroups">Ambil daftar grup</button><span id="groupsNote" class="muted"></span></div>
+    </div>
+    <div class="row"><button class="primary" id="send">Kirim sekarang</button><span id="sendOut" class="muted"></span></div>
   </section>
 
   <section>
     <h2>Jadwalkan</h2>
-    <p class="muted" style="margin:0">Memakai grup dan pesan di atas. Jadwal berjalan selama layanan WhatsApp Studio menyala, tanpa perlu membuka Claude.</p>
+    <p class="muted" style="margin:0">Memakai pesan dan tujuan di atas. Jadwal berjalan selama layanan menyala, tanpa perlu membuka Claude.</p>
     <div class="grid2">
       <div><label for="mode">Kapan</label><select id="mode"><option value="at">Sekali</option><option value="daily">Setiap hari</option></select></div>
       <div id="atBox"><label for="at">Tanggal &amp; jam</label><input id="at" type="datetime-local"></div>
@@ -64,6 +70,25 @@
     <div class="row"><button class="primary" id="addSched">Simpan jadwal</button><span id="schedOut" class="muted"></span></div>
     <h2 style="margin-top:20px">Jadwal aktif <span id="tz" class="muted"></span></h2>
     <ul class="list" id="schedList"></ul>
+  </section>
+
+  <section>
+    <h2>Telegram</h2>
+    <div id="tgInfo" class="muted">Memuat…</div>
+    <label for="tgToken">Token bot (dari @BotFather)</label>
+    <div class="row" style="margin-top:0"><input id="tgToken" type="password" autocomplete="off" placeholder="123456:ABC..." style="flex:1"><button id="saveToken">Simpan token</button></div>
+    <h2 style="margin-top:20px">Grup tersimpan</h2>
+    <ul class="list" id="tgSaved"></ul>
+    <h2 style="margin-top:20px">Tambah grup</h2>
+    <p class="muted" style="margin:0">Tambahkan bot ke grup Telegram, kirim satu pesan di grup itu, lalu klik <b>Cari grup</b>.</p>
+    <div class="row"><button id="tgFind">Cari grup</button></div>
+    <ul class="list" id="tgRecent"></ul>
+    <div class="grid2">
+      <div><label for="tgAlias">Alias</label><input id="tgAlias" placeholder="sbp-branding"></div>
+      <div><label for="tgId">ID grup</label><input id="tgId" placeholder="-100…"></div>
+    </div>
+    <div class="targets"><label><input type="checkbox" id="tgDefault" checked> Default (otomatis dipilih untuk pengumuman)</label></div>
+    <div class="row"><button class="primary" id="tgAdd">Simpan grup</button><span id="tgOut" class="muted"></span></div>
   </section>
 
   <section>
@@ -94,14 +119,44 @@ async function loadStatus() {
     $("qr").innerHTML = s.qr_png ? `<p class="muted">WhatsApp di HP → Perangkat tertaut → Tautkan perangkat:</p><img alt="QR WhatsApp" src="data:image/png;base64,${s.qr_png}">` : "";
   } catch (e) { $("status").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
 }
+let TG = { saved: [] };
+async function loadTg(withRecent) {
+  try {
+    TG = await api("tg_chats");
+    $("tgInfo").innerHTML = TG.token ? `Bot <b>${esc(TG.bot)}</b> aktif.` : '<span class="warn">Token bot belum diisi.</span>';
+    $("tgSaved").innerHTML = TG.saved.length ? TG.saved.map((c) => `<li><div><b>${esc(c.alias)}</b> · ${esc(c.title)} <span class="muted">(${esc(c.id)})${c.default ? " · default" : ""}</span></div><button data-tgdel="${esc(c.alias)}">Hapus</button></li>`).join("") : '<li class="muted">Belum ada grup.</li>';
+    $("tgTargets").innerHTML = TG.saved.length ? TG.saved.map((c) => `<label><input type="checkbox" value="${esc(c.alias)}"${c.default ? " checked" : ""}> ${esc(c.alias)} <span class="muted">· ${esc(c.title)}</span></label>`).join("") : '<span class="muted">Belum ada grup Telegram. Atur di bagian Telegram di bawah.</span>';
+    if (withRecent) {
+      const rec = Array.isArray(TG.recent) ? TG.recent : [];
+      $("tgRecent").innerHTML = TG.recent?.error ? `<li class="bad">${esc(TG.recent.error)}</li>` : rec.length ? rec.map((c) => `<li><div>${esc(c.title)} <span class="muted">(${esc(c.id)}, ${esc(c.type)})</span></div><button data-tgpick="${esc(c.id)}" data-title="${esc(c.title)}">Pilih</button></li>`).join("") : '<li class="muted">Belum terlihat grup. Pastikan bot sudah di grup dan ada pesan baru di sana.</li>';
+    }
+  } catch (e) { $("tgInfo").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+const tgChosen = () => [...$("tgTargets").querySelectorAll("input:checked")].map((i) => i.value);
+const targetsText = (tgs, wa) => [...tgs.map((a) => "Telegram: " + a), ...(wa ? ["WhatsApp: " + wa] : [])].join("\n");
+$("useWa").onchange = () => { $("waBox").hidden = !$("useWa").checked; };
+$("saveToken").onclick = async () => {
+  const token = $("tgToken").value.trim(); if (!token) return;
+  try { const r = await api("tg_set_token", { token }); $("tgToken").value = ""; $("tgInfo").innerHTML = `<span class="ok">Tersimpan: ${esc(r.bot)}</span>`; loadTg(); }
+  catch (e) { $("tgInfo").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+};
+$("tgFind").onclick = () => loadTg(true);
+$("tgRecent").onclick = (e) => { const id = e.target.dataset?.tgpick; if (!id) return; $("tgId").value = id; if (!$("tgAlias").value) $("tgAlias").value = (e.target.dataset.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); };
+$("tgAdd").onclick = async () => {
+  const alias = $("tgAlias").value.trim(), id = $("tgId").value.trim();
+  if (!alias || !id) return alert("Isi alias dan ID grup.");
+  try { const r = await api("tg_add_chat", { alias, chat_id: /^-?\d+$/.test(id) ? Number(id) : id, default: $("tgDefault").checked }); $("tgOut").innerHTML = `<span class="ok">Tersimpan: ${esc(r.title)}</span>`; $("tgAlias").value = $("tgId").value = ""; loadTg(); }
+  catch (e) { $("tgOut").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+};
+$("tgSaved").onclick = async (e) => { const a = e.target.dataset?.tgdel; if (!a || !confirm(`Hapus grup ${a}?`)) return; await api("tg_remove_chat", { alias: a }).catch((err) => alert(err.message)); loadTg(); };
 async function loadScheds() {
   const { schedules, timezone } = await api("schedules");
   $("tz").textContent = `(${timezone})`;
-  $("schedList").innerHTML = schedules.length ? schedules.map((s) => `<li><div><b>${esc(s.chat)}</b> · ${s.daily ? `tiap hari ${esc(s.daily)}${s.days ? " (" + s.days.map((d) => DAYS[d - 1]).join(", ") + ")" : ""}` : "sekali"} · berikutnya <b>${esc(s.next)}</b>${s.label ? " · " + esc(s.label) : ""}<div class="msg muted">${esc(s.text)}</div></div><button data-del="${esc(s.id)}">Hapus</button></li>`).join("") : '<li class="muted">Belum ada jadwal.</li>';
+  $("schedList").innerHTML = schedules.length ? schedules.map((s) => `<li><div><b>${esc([...(s.telegram || []).map((a) => "TG " + a), ...(s.whatsapp ? ["WA " + s.whatsapp] : [])].join(" + "))}</b> · ${s.daily ? `tiap hari ${esc(s.daily)}${s.days ? " (" + s.days.map((d) => DAYS[d - 1]).join(", ") + ")" : ""}` : "sekali"} · berikutnya <b>${esc(s.next)}</b>${s.label ? " · " + esc(s.label) : ""}<div class="msg muted">${esc(s.text)}</div></div><button data-del="${esc(s.id)}">Hapus</button></li>`).join("") : '<li class="muted">Belum ada jadwal.</li>';
 }
 async function loadHist() {
   const { entries } = await api("history", { limit: 30 });
-  $("hist").innerHTML = entries.length ? entries.map((h) => `<li><div><span class="${h.ok ? "ok" : "bad"}">${h.ok ? "✓" : "✗"}</span> <b>${esc(h.chat)}</b> <span class="muted">· ${esc(new Date(h.time).toLocaleString())} · ${esc(h.source)}${h.status ? " · " + esc(h.status) : ""}</span><div class="msg muted">${esc(h.ok ? h.preview : h.error)}</div></div></li>`).join("") : '<li class="muted">Belum ada pengiriman.</li>';
+  $("hist").innerHTML = entries.length ? entries.map((h) => `<li><div><span class="${h.ok ? "ok" : "bad"}">${h.ok ? "✓" : "✗"}</span> <b>${esc(h.to || h.chat)}</b> <span class="muted">· ${esc(new Date(h.time).toLocaleString())} · ${esc(h.source)}${h.status ? " · " + esc(h.status) : ""}</span><div class="msg muted">${esc(h.ok ? h.preview : h.error)}</div></div></li>`).join("") : '<li class="muted">Belum ada pengiriman.</li>';
 }
 $("schedList").onclick = async (e) => {
   const id = e.target.dataset?.del; if (!id || !confirm("Hapus jadwal ini?")) return;
@@ -113,25 +168,30 @@ $("loadGroups").onclick = async () => {
   catch (e) { $("groupsNote").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   $("loadGroups").disabled = false;
 };
+function collect() {
+  const text = $("text").value, telegram = tgChosen(), whatsapp = $("useWa").checked ? $("chat").value.trim() : "";
+  if (!text.trim()) { alert("Tulis pesannya dulu."); return null; }
+  if ($("useWa").checked && !whatsapp) { alert("Isi nama grup WhatsApp, atau hapus centangnya."); return null; }
+  if (!telegram.length && !whatsapp) { alert("Pilih minimal satu tujuan."); return null; }
+  return { text, telegram, whatsapp: whatsapp || undefined };
+}
 $("send").onclick = async () => {
-  const chat = $("chat").value.trim(), text = $("text").value;
-  if (!chat || !text.trim()) return alert("Isi grup dan pesan.");
-  if (!confirm(`Kirim ke grup "${chat}"?\n\n${text}`)) return;
+  const a = collect(); if (!a) return;
+  if (!confirm(`Kirim ke:\n${targetsText(a.telegram, a.whatsapp)}\n\n${a.text}`)) return;
   $("send").disabled = true; $("sendOut").textContent = "Mengirim…";
-  try { const r = await api("send", { chat, text }); $("sendOut").innerHTML = `<span class="ok">Terkirim ke ${esc(r.chat)} (${esc(r.status)})</span>`; }
+  try { const r = await api("announce", a); $("sendOut").innerHTML = r.results.map((x) => `<span class="${x.ok ? "ok" : "bad"}">${x.ok ? "✓" : "✗"} ${esc(x.to)}${x.ok ? "" : ": " + esc(x.error)}</span>`).join("<br>"); }
   catch (e) { $("sendOut").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   $("send").disabled = false; loadHist();
 };
 $("addSched").onclick = async () => {
-  const chat = $("chat").value.trim(), text = $("text").value;
-  if (!chat || !text.trim()) return alert("Isi grup dan pesan di bagian Kirim sekarang.");
-  const args = { chat, text, label: $("label").value.trim() || undefined };
+  const a = collect(); if (!a) return;
+  const args = { ...a, label: $("label").value.trim() || undefined };
   if ($("mode").value === "at") { if (!$("at").value) return alert("Pilih tanggal dan jam."); args.at = $("at").value.replace("T", " "); }
   else { args.daily = $("daily").value; const d = [...$("days").querySelectorAll("input:checked")].map((i) => +i.value); if (d.length) args.days = d; }
   try { const s = await api("schedule_add", args); $("schedOut").innerHTML = `<span class="ok">Tersimpan, berikutnya ${esc(s.next)}</span>`; loadScheds(); }
   catch (e) { $("schedOut").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
 };
-$("refresh").onclick = () => { loadStatus(); loadScheds(); loadHist(); };
+$("refresh").onclick = () => { loadTg(); loadStatus(); loadScheds(); loadHist(); };
 $("refresh").onclick();
 </script>
 </body>

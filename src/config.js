@@ -10,6 +10,7 @@ export const TOKEN_FILE = join(HOME, "token");
 export const SCHEDULE_FILE = join(HOME, "schedules.json");
 export const HISTORY_FILE = join(HOME, "history.jsonl");
 export const LOG_FILE = join(HOME, "daemon.log");
+export const TELEGRAM_FILE = join(HOME, "telegram.json");
 
 export const PORT = Number(env.WA_STUDIO_PORT ?? 8792);
 export const CDP_PORT = Number(env.WA_STUDIO_CDP_PORT ?? 9345);
