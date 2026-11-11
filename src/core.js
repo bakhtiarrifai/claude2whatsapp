@@ -1,6 +1,7 @@
 // What every front end (MCP tools, panel, scheduler) calls. One send at a time, at a person's pace, with a history.
 import { randomBytes } from "node:crypto";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { HISTORY_FILE, HOME, LATE_LIMIT_MIN, MAX_PER_HOUR, MAX_TEXT, MIN_GAP_S, SCHEDULE_FILE } from "./config.js";
 import * as tg from "./telegram.js";
@@ -19,6 +20,11 @@ export const shapes = {
   groups: {},
   send: { chat, text, dry_run: z.boolean().optional().describe("true: hanya cari dan buka grupnya, tanpa mengirim (untuk mengecek nama).") },
   announce: { text, telegram, whatsapp },
+  send_file: {
+    chat,
+    files: z.array(z.string().trim().min(1)).min(1).max(10).describe("Path absolut file di komputer ini (PDF, PPTX, XLSX, gambar...), maks 10, masing-masing ≤ 100 MB."),
+    dry_run: z.boolean().optional().describe("true: hanya cari dan buka chatnya, tanpa mengirim."),
+  },
   tg_chats: {},
   tg_add_chat: { alias, chat_id: z.union([z.number().int(), z.string().regex(/^(-?\d+|@\w{4,})$/)]).describe("ID grup (angka, biasanya diawali -100) atau @username channel."), default: z.boolean().optional().describe("Ikut menerima announce yang tidak menyebut grup Telegram.") },
   tg_remove_chat: { alias },
@@ -131,6 +137,35 @@ export class Studio {
         return { ok: true, chat: r.chat, status: r.status };
       } catch (e) {
         this.record({ source, to: `whatsapp:${chat}`, ok: false, error: e.message, preview: text.slice(0, 80) });
+        throw e;
+      }
+    });
+  }
+
+  // Files as WhatsApp documents to one chat; counts as one send for the pace limits.
+  send_file({ chat, files, dry_run }, source = "manual") {
+    for (const f of files) {
+      if (!isAbsolute(f) || !existsSync(f)) throw new Error(`File tidak ditemukan (pakai path absolut): ${f}`);
+      const st = statSync(f);
+      if (!st.isFile()) throw new Error(`Bukan file: ${f}`);
+      if (st.size > 100 * 1024 * 1024) throw new Error(`File lebih dari 100 MB: ${f}`);
+    }
+    if (dry_run) return this.exclusive(`check ${chat}`, () => wa.sendFiles(chat, files, { dryRun: true }));
+    return this.exclusive(`send files to ${chat}`, async () => {
+      const now = Date.now();
+      this.sentAt = this.sentAt.filter((t) => now - t < 3600e3);
+      if (this.sentAt.length >= MAX_PER_HOUR) throw new Error(`Batas ${MAX_PER_HOUR} pesan per jam tercapai. Coba lagi nanti.`);
+      const wait = (this.sentAt.at(-1) ?? 0) + MIN_GAP_S * 1000 - now;
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      const preview = "file: " + files.map((f) => f.split("/").pop()).join(", ");
+      try {
+        const r = await wa.sendFiles(chat, files);
+        this.sentAt.push(Date.now());
+        const ok = Object.values(r.status).every((t) => t && t !== "pending");
+        this.record({ source, to: `whatsapp:${r.chat}`, ok, status: JSON.stringify(r.status), preview: preview.slice(0, 120) });
+        return { ok, chat: r.chat, files: r.files, status: r.status };
+      } catch (e) {
+        this.record({ source, to: `whatsapp:${chat}`, ok: false, error: e.message, preview: preview.slice(0, 120) });
         throw e;
       }
     });

@@ -147,6 +147,73 @@ export async function send(name, text, { dryRun = false } = {}) {
   return { chat, status: tick };
 }
 
+// Attachments: the "+" (Attach) button in the chat footer opens a menu whose "Document" entry owns a hidden
+// <input type=file accept="*">. Documents keep their file name and are not recompressed, so PPTX/PDF/XLSX go as-is.
+const ATTACH = [
+  '#main footer [aria-label="Attach"]', '#main footer [title="Attach"]', '#main footer [aria-label="Lampirkan"]',
+  '#main footer button:has(span[data-icon="plus-rounded"])', '#main footer button:has(span[data-icon="plus"])',
+  '#main footer span[data-icon="attach-menu-plus"]', '#main footer span[data-icon="clip"]',
+].join(", ");
+const PREVIEW_SEND = [
+  'div[role="button"][aria-label^="Send "]', 'div[role="button"][aria-label^="Kirim "]', // "Send 2 selected"
+  'div[role="button"][aria-label="Send"]', 'div[role="button"][aria-label="Kirim"]',
+  'span[data-icon="send"]', 'span[data-icon="wds-ic-send-filled"]',
+].join(", ");
+
+// Sends files as WhatsApp documents to one chat (same exact-name and header checks as send). Waits until a bubble
+// with each file name shows a status past "pending" (upload done).
+export async function sendFiles(name, paths, { dryRun = false } = {}) {
+  const { basename } = await import("node:path");
+  const page = await readyPage();
+  const chat = await openChat(page, name);
+  if (dryRun) return { chat, status: "dry-run: chat ditemukan dan dibuka, tidak ada file yang dikirim" };
+  try {
+    await page.locator(ATTACH).first().click({ timeout: 8000 });
+    await page.waitForTimeout(800);
+    const input = page.locator('input[type="file"][accept="*"]').first();
+    if (await input.count()) {
+      await input.setInputFiles(paths);
+    } else {
+      const item = page.locator('[role="menuitem"][aria-label="Document"], [role="menuitem"][aria-label="Dokumen"]').first();
+      const [chooser] = await Promise.all([page.waitForEvent("filechooser", { timeout: 10000 }), item.click({ timeout: 8000 })]);
+      await chooser.setFiles(paths);
+    }
+    const sendBtn = page.locator(PREVIEW_SEND).last();
+    await sendBtn.waitFor({ state: "visible", timeout: 20000 });
+    await page.waitForTimeout(800);
+    await sendBtn.click();
+  } catch (e) {
+    await page.screenshot({ path: `${process.env.HOME}/.wa-studio/last-file-error.png` }).catch(() => {});
+    await page.keyboard.press("Escape").catch(() => {});
+    // Leaving the preview asks "Discard selection?"; confirm it so the chat is usable again (nothing is sent).
+    await page.locator('[role="dialog"]').getByRole("button", { name: /^(Discard|Buang)$/ }).click({ timeout: 3000 }).catch(() => {});
+    throw new WaError(`Gagal melampirkan/mengirim file (${e.message.split("\n")[0]}). Screenshot: ~/.wa-studio/last-file-error.png`);
+  }
+  const names = paths.map((p) => basename(p));
+  const end = Date.now() + 120000;
+  let ticks = {};
+  while (Date.now() < end) {
+    await page.waitForTimeout(1000);
+    ticks = await page.evaluate(([sel, probes]) => {
+      const STATUS = /^(pending|sent|delivered|read|menunggu|terkirim|diterima|dibaca)$/;
+      const labelsOf = (e) => [...e.querySelectorAll("[aria-label]")].map((x) => x.getAttribute("aria-label").trim().toLowerCase());
+      const recent = [...document.querySelectorAll(sel)].slice(-10);
+      const out = {};
+      for (const p of probes) {
+        const mine = recent.reverse().find((e) => e.innerText.includes(p) && labelsOf(e).some((l) => STATUS.test(l)));
+        recent.reverse();
+        if (!mine) { out[p] = null; continue; }
+        const l = labelsOf(mine);
+        out[p] = l.some((x) => /^(read|dibaca)$/.test(x)) ? "read" : l.some((x) => /^(delivered|diterima)$/.test(x)) ? "delivered"
+          : l.some((x) => /^(sent|terkirim)$/.test(x)) ? "sent" : "pending";
+      }
+      return out;
+    }, [SEL.messages, names]);
+    if (Object.values(ticks).every((t) => t && t !== "pending")) break;
+  }
+  return { chat, files: names, status: ticks };
+}
+
 // Group names, from WhatsApp's own "Groups" filter while scrolling the chat list.
 export async function groups() {
   const page = await readyPage();

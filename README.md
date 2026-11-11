@@ -45,6 +45,7 @@ Di Claude Code, misalnya:
 - *"Umumkan ke SBP: report minggu ini …"* → `announce` ke grup Telegram default saja
 - *"Umumkan ke SBP, kirim juga ke WA grup SBP Branding: …"* → `announce` dengan `whatsapp` → dua report, satu di Telegram, satu di WhatsApp
 - *"Kirim ke grup WA Tim Konten: Rapat jam 3 sore ya."* → `wa_send` (WhatsApp saja)
+- *"Kirim file deck.pdf dan deck.pptx ke WA Indra Mulyadi"* → `wa_send_file`
 - *"Tiap Senin dan Kamis jam 08.00 ingatkan grup Tim Konten untuk setor ide."* → `wa_schedule_add`
 - *"Jadwal apa saja yang aktif?"*, *"Hapus jadwal a1b2c3"*, *"Pesan terakhir terkirim?"*
 
@@ -55,6 +56,7 @@ Di Claude Code, misalnya:
 | `announce` | Satu teks ke grup Telegram (alias; tanpa `telegram` = grup default) dan opsional `whatsapp`. Hasil per tujuan terpisah |
 | `tg_chats`, `tg_add_chat`, `tg_remove_chat` | Status bot, grup Telegram tersimpan, grup yang baru dilihat bot beserta ID-nya |
 | `wa_send` | Kirim ke satu grup WhatsApp saja, nama harus persis. `dry_run: true` hanya mencari dan membuka grupnya |
+| `wa_send_file` | Kirim file lokal (PDF, PPTX, XLSX, gambar; path absolut, maks 10 file @ ≤ 100 MB) sebagai dokumen WhatsApp ke satu grup/kontak. Ikut batas jeda & per jam |
 | `wa_schedule_add` | Tujuan sama seperti `announce`. Sekali (`at: "YYYY-MM-DD HH:MM"`) atau harian (`daily: "HH:MM"`, opsional `days`: 1 = Senin … 7 = Minggu) |
 | `wa_schedules`, `wa_schedule_remove` | Lihat dan hapus jadwal |
 | `wa_history` | Riwayat kirim (manual, dari Claude, terjadwal), termasuk alasan gagal |

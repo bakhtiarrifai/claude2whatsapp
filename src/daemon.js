@@ -56,8 +56,8 @@ const server = createServer(async (req, res) => {
     if (req.method !== "POST" || !op || !Object.hasOwn(shapes, op)) return reply(res, 404, { error: "Not found." });
     const args = z.object(shapes[op]).parse(JSON.parse((await body(req)) || "{}"));
     const source = req.headers["x-wa-source"] === "mcp" ? "claude" : "panel";
-    const result = op === "send" ? await studio.send(args, source) : await studio[op](args);
-    if (op === "send" || op.startsWith("schedule_")) log(`${source} ${op} ${JSON.stringify(op === "send" ? { chat: args.chat } : result).slice(0, 200)}`);
+    const result = op === "send" || op === "send_file" ? await studio[op](args, source) : await studio[op](args);
+    if (op.startsWith("send") || op.startsWith("schedule_")) log(`${source} ${op} ${JSON.stringify(op.startsWith("send") ? { chat: args.chat } : result).slice(0, 200)}`);
     reply(res, 200, result);
   } catch (err) {
     const msg = err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : (err?.message ?? String(err));
